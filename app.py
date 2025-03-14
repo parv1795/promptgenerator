@@ -1,213 +1,303 @@
 import streamlit as st
 import openai
+import time
 import re
-import os
-from dotenv import load_dotenv
-
-# Load environment variables (optional, for local development)
-load_dotenv()
+import random
 
 def validate_api_key(api_key):
-    """Validate the OpenAI API key by making a test request."""
-    if not api_key or not api_key.strip():
+    """Validate the OpenAI API key by making a small test request."""
+    if not api_key or len(api_key) < 30:  # Basic format check
         return False
     
-    # Check if the API key follows the expected format
-    if not api_key.startswith("sk-") or len(api_key) < 20:
-        return False
-    
-    # Make a minimal API call to verify the key works
+    openai.api_key = api_key
     try:
-        client = openai.OpenAI(api_key=api_key)
-        # Using a minimal request to check if the API key is valid
-        models = client.models.list()
+        # Make a minimal API call to check if the key works
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Test"}],
+            max_tokens=5
+        )
         return True
     except Exception as e:
-        st.error(f"API key validation error: {str(e)}")
+        st.error(f"API Key validation failed: {str(e)}")
         return False
 
-def enhance_prompt(role, context, task):
-    """Generate an enhanced and intelligent prompt based on user inputs."""
-    # Dictionary of domain-specific knowledge to enhance prompts
-    domain_knowledge = {
-        "iso": {
-            "description": "International Organization for Standardization - a global standard-setting body",
-            "context_add": "ISO standards are crucial for ensuring consistency, quality, and safety across industries worldwide.",
-            "common_standards": ["ISO 9001 (Quality Management)", "ISO 14001 (Environmental Management)", 
-                                "ISO 27001 (Information Security)", "ISO 22301 (Business Continuity)"]
-        },
-        "iso 22301": {
-            "description": "Business Continuity Management System standard",
-            "context_add": "ISO 22301 helps organizations prepare for, respond to, and recover from disruptive incidents.",
-            "key_components": ["Risk Assessment", "Business Impact Analysis", "Business Continuity Strategy", 
-                              "Business Continuity Plans", "Exercise and Testing", "Performance Evaluation"]
-        },
-        "iso 9001": {
-            "description": "Quality Management System standard",
-            "context_add": "ISO 9001 helps organizations ensure they meet customer requirements and enhance satisfaction."
-        },
-        "iso 27001": {
-            "description": "Information Security Management System standard",
-            "context_add": "ISO 27001 helps organizations protect their information assets."
-        }
+def transform_prompt(role, context, task):
+    """Transform the inputs into a completely enhanced prompt."""
+    
+    # Extract key information from inputs
+    role_lower = role.lower()
+    context_lower = context.lower()
+    task_lower = task.lower()
+    
+    # Identify domain/expertise
+    domains = {
+        "develop": "software development",
+        "program": "programming",
+        "code": "coding",
+        "tech": "technology",
+        "market": "marketing",
+        "business": "business strategy",
+        "write": "content creation",
+        "content": "content strategy",
+        "data": "data analysis",
+        "analy": "analytics",
+        "research": "research",
+        "design": "design",
+        "product": "product management",
+        "teach": "education",
+        "learn": "learning",
+        "consult": "consulting"
     }
     
-    # Clean and normalize inputs
-    role_clean = role.strip().lower()
-    context_clean = context.strip().lower()
-    task_clean = task.strip().lower()
+    identified_domain = None
+    for key, domain in domains.items():
+        if key in role_lower or key in task_lower:
+            identified_domain = domain
+            break
     
-    # Detect keywords in the inputs
-    combined_text = f"{role_clean} {context_clean} {task_clean}"
+    if not identified_domain:
+        identified_domain = "professional consulting"
     
-    # Format role properly
-    role_refined = role.strip()
-    if not role_refined.lower().startswith(("you are", "as a", "as an")):
-        if role_refined.lower().startswith("i am"):
-            role_refined = role_refined.replace("I am", "You are")
-        else:
-            role_refined = f"You are a {role_refined}"
+    # Determine experience level
+    experience_levels = ["expert", "senior", "experienced", "specialist", "professional"]
+    experience_level = next((level for level in experience_levels if level in role_lower), "experienced")
     
-    # Remove redundant phrases
-    role_refined = re.sub(r"You are a You are a", "You are a", role_refined)
-    role_refined = re.sub(r"You are a As a", "You are a", role_refined)
+    # Determine if this is a learning/teaching scenario
+    is_learning = any(term in context_lower for term in ["learn", "beginner", "newbie", "starting", "new to"])
     
-    # Ensure first letter is capitalized
-    role_refined = role_refined[0].upper() + role_refined[1:]
+    # Determine project type
+    project_types = {
+        "app": "application development",
+        "website": "web development",
+        "platform": "platform development",
+        "tool": "tool creation",
+        "dashboard": "dashboard development",
+        "script": "script development",
+        "system": "system design",
+        "framework": "framework development",
+        "api": "API development",
+        "database": "database solution",
+        "automation": "automation solution",
+        "ai": "AI solution",
+        "ml": "machine learning solution",
+        "analytics": "analytics solution"
+    }
     
-    # Enhance context with domain knowledge
-    context_enhanced = context.strip()
-    additional_context = []
+    project_type = None
+    for key, proj_type in project_types.items():
+        if key in task_lower:
+            project_type = proj_type
+            break
     
-    # Check for ISO-related keywords
-    for keyword, info in domain_knowledge.items():
-        if keyword in combined_text:
-            additional_context.append(info.get("context_add", ""))
-            
-            # Add more specific information for ISO 22301 if relevant
-            if keyword == "iso 22301" and "study" in task_clean:
-                additional_context.append("An effective study plan should cover the standard's structure, key principles, implementation steps, and certification process.")
+    if not project_type:
+        project_type = "solution"
     
-    # Add the enhanced context if we have any
-    if additional_context:
-        if context_enhanced and not context_enhanced.endswith(('.', '!', '?')):
-            context_enhanced += '.'
-        context_enhanced += " " + " ".join(additional_context)
+    # Determine technologies/tools mentioned
+    technologies = {
+        "python": "Python",
+        "javascript": "JavaScript",
+        "js": "JavaScript",
+        "react": "React",
+        "node": "Node.js",
+        "flask": "Flask",
+        "django": "Django",
+        "streamlit": "Streamlit",
+        "tensorflow": "TensorFlow",
+        "pytorch": "PyTorch",
+        "pandas": "pandas",
+        "numpy": "NumPy",
+        "sql": "SQL",
+        "docker": "Docker",
+        "kubernetes": "Kubernetes",
+        "aws": "AWS",
+        "azure": "Azure",
+        "gcp": "Google Cloud",
+        "api": "API"
+    }
     
-    # Enhance task with specifics
-    task_enhanced = task.strip()
+    tech_stack = []
+    all_text = f"{role_lower} {context_lower} {task_lower}"
+    for key, tech in technologies.items():
+        if key in all_text:
+            tech_stack.append(tech)
     
-    # Add specific enhancements for study plans
-    if "study plan" in task_clean and "iso 22301" in combined_text:
-        if not task_enhanced.endswith(('.', '!', '?')):
-            task_enhanced += '.'
-        task_enhanced += " The plan should include daily learning objectives, key concepts, practical exercises, and assessment methods. It should be structured to provide a comprehensive understanding of Business Continuity Management principles and ISO 22301 requirements."
+    # Generate a compelling title
+    titles = [
+        f"Creating a {project_type.title()} for {identified_domain.title()}",
+        f"Developing a Custom {project_type.title()} Solution",
+        f"{identified_domain.title()} {project_type.title()} Project",
+        f"Building a Specialized {project_type.title()} for {identified_domain.title()}"
+    ]
     
-    # Create the final enhanced prompt
-    prompt = f"""{role_refined},
+    title = random.choice(titles)
+    
+    # Generate persona
+    personas = [
+        f"As an {experience_level} {identified_domain} specialist with a focus on {', '.join(tech_stack) if tech_stack else 'cutting-edge technologies'}",
+        f"Taking the perspective of a seasoned {identified_domain} professional with deep expertise in {', '.join(tech_stack) if tech_stack else 'modern development practices'}",
+        f"Working as a {experience_level} developer specializing in {identified_domain} and {', '.join(tech_stack) if tech_stack else 'innovative solutions'}"
+    ]
+    
+    persona = random.choice(personas)
+    
+    # Generate project description
+    task_description = task.strip().rstrip('.')
+    if not task_description.lower().startswith(("create", "develop", "build", "design", "implement")):
+        task_description = f"develop {task_description}"
+    
+    # Generate objectives
+    objectives = []
+    
+    if is_learning:
+        objectives.append("Create a solution that serves as both a functional tool and a learning resource")
+        objectives.append("Provide clear code structure with comments that explain the implementation")
+        objectives.append("Include step-by-step setup instructions for beginners")
+    else:
+        objectives.append(f"Deliver a high-quality {project_type} that meets industry standards")
+        objectives.append("Ensure the solution is robust, scalable, and maintainable")
+        objectives.append("Optimize for performance and user experience")
+    
+    if "streamlit" in all_text:
+        objectives.append("Develop an intuitive Streamlit interface with responsive design")
+        objectives.append("Implement effective state management for a seamless user experience")
+    
+    if "api" in all_text:
+        objectives.append("Create secure API integration with proper validation and error handling")
+    
+    # Generate requirements
+    requirements = []
+    
+    if "app" in all_text or "application" in all_text:
+        requirements.append("Intuitive user interface with clear navigation and feedback")
+        requirements.append("Responsive design that works across different devices")
+        requirements.append("Proper error handling and user guidance")
+    
+    if "python" in all_text:
+        requirements.append("Clean, well-organized Python code following PEP 8 standards")
+        requirements.append("Modular architecture with separation of concerns")
+        requirements.append("Comprehensive documentation and inline comments")
+    
+    if "streamlit" in all_text:
+        requirements.append("Efficient Streamlit components and layouts")
+        requirements.append("State management for user session data")
+        requirements.append("Properly structured app with clear sections and navigation")
+    
+    # Generate final prompt
+    prompt = f"""# {title}
 
-Context:
-{context_enhanced}
+{persona}, I need your expertise to {task_description}.
 
-Task:
-{task_enhanced}
+## Project Context
+I'm {context.strip().rstrip('.')}. This project is intended to {task_description.lower()} that will help me {context.strip().lower()}.
 
-Please provide a detailed and structured response that addresses the task comprehensively. Include practical examples, implementation tips, and best practices where relevant. If you need any clarification or additional information, please ask specific questions.
+## Key Objectives
+{'. '.join(objectives)}
 
-The response should be well-organized with clear headings, bullet points where appropriate, and a logical flow of information."""
+## Technical Requirements
+The solution should include:
+- {'. '.join(requirements)}
+- Proper security measures including input validation and data protection
+- Clean, maintainable code with appropriate documentation
+- Scalable architecture that can accommodate future enhancements
 
-    return prompt.strip()
+## Deliverables
+Please provide:
+1. A complete, working solution with all necessary code and components
+2. Clear explanation of the solution architecture and key design decisions
+3. Step-by-step instructions for setting up and running the application
+4. Recommendations for future improvements and expansions
 
-def main():
-    st.set_page_config(page_title="AI Prompt Generator", layout="wide")
+## Additional Considerations
+- The solution should be accessible to users with varying levels of technical expertise
+- Include best practices for code organization and project structure
+- Consider performance optimization for a smooth user experience
+- Address potential security concerns and implementation challenges
+
+If you need any clarification or additional information about my requirements, technical background, or project goals, please let me know.
+"""
     
-    st.title("AI Prompt Generator")
-    st.write("Generate enhanced, intelligent prompts for AI models based on role, context, and task.")
+    return prompt
+
+# Set page config
+st.set_page_config(page_title="Smart Prompt Enhancer", layout="wide")
+
+# App title and description
+st.title("🚀 Smart Prompt Enhancer")
+st.markdown("""
+This app transforms your basic prompt concepts into sophisticated, professionally crafted prompts
+that will generate superior AI responses. Enter your OpenAI API key to get started.
+""")
+
+# API Key input
+api_key = st.text_input("OpenAI API Key:", type="password", help="Your key will be used only for validation and won't be stored.")
+
+# Validate key when provided
+key_valid = False
+if api_key:
+    with st.spinner("Validating API key..."):
+        key_valid = validate_api_key(api_key)
     
-    # Initialize session state for API key validation and prompt storage
-    if 'api_key_valid' not in st.session_state:
-        st.session_state.api_key_valid = False
-    if 'generated_prompt' not in st.session_state:
-        st.session_state.generated_prompt = ""
+    if key_valid:
+        st.success("✅ API key is valid!")
+    else:
+        st.error("❌ Invalid API key. Please check and try again.")
+
+# Only show the prompt builder if key is valid
+if key_valid:
+    st.markdown("---")
+    st.header("Define Your Prompt Components")
     
-    # API Key input section
-    with st.container():
-        st.subheader("API Key Validation")
-        api_key = st.text_input("Enter your OpenAI API Key", type="password", help="Your API key will not be stored")
-        
-        # Check if there's an API key in environment variables
-        env_api_key = os.getenv("OPENAI_API_KEY")
-        if env_api_key and not api_key:
-            st.info("Using API key from environment variables. You can override it by entering a new key above.")
-            api_key = env_api_key
-            
-        # Validate API key only when the button is clicked
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            if st.button("Validate API Key"):
-                if not api_key:
-                    st.error("Please enter an API key")
-                else:
-                    with st.spinner("Validating API Key..."):
-                        st.session_state.api_key_valid = validate_api_key(api_key)
-                    
-                    if st.session_state.api_key_valid:
-                        st.success("API Key is valid!")
-                    else:
-                        st.error("Invalid API Key. Please check and try again.")
+    # Prompt components
+    role = st.text_area(
+        "Role:",
+        placeholder="Who should the AI act as? (e.g., 'Python Developer' or 'Marketing Specialist')",
+        help="The expertise or perspective you want the AI to adopt."
+    )
     
-    # Prompt creation section
-    st.write("---")
-    st.subheader("Create Your Prompt")
+    context = st.text_area(
+        "Context/Background:",
+        placeholder="Your situation or relevant details (e.g., 'Beginner looking to build my first app')",
+        help="Your background, situation, or relevant context."
+    )
     
-    # User inputs
-    role = st.text_area("Role", 
-                       placeholder="Describe the role that the AI should assume (e.g., 'ISO Consultant')")
+    task = st.text_area(
+        "Task:",
+        placeholder="What do you want the AI to do? (e.g., 'Create a data visualization app')",
+        help="The specific outcome you want from the AI."
+    )
     
-    context = st.text_area("Context/Background", 
-                          placeholder="Provide relevant background information or context")
-    
-    task = st.text_area("Task", 
-                       placeholder="Specify the task or question you want the AI to address")
-    
-    # Generate prompt button
+    # Generate button
     if st.button("Generate Enhanced Prompt"):
         if not (role and context and task):
-            st.warning("Please fill in all fields")
+            st.warning("Please fill in all three prompt components.")
         else:
-            st.session_state.generated_prompt = enhance_prompt(role, context, task)
-            
-            # Display the generated prompt
-            st.write("---")
-            st.subheader("Enhanced Prompt")
-            st.code(st.session_state.generated_prompt, language="markdown")
-            
-            # Copy button
-            st.markdown("""
-            <div style="text-align: right;">
-                <button onclick="navigator.clipboard.writeText(document.querySelector('code').innerText); alert('Copied to clipboard!');" class="css-1x8cf1d edgvbvh10">Copy to clipboard</button>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # OpenAI testing section
-    if st.session_state.generated_prompt and ((api_key and st.session_state.api_key_valid) or env_api_key):
-        st.write("---")
-        st.subheader("Test with OpenAI")
-        if st.button("Send to OpenAI for testing", key="test_openai"):
-            with st.spinner("Getting response from OpenAI..."):
-                try:
-                    client = openai.OpenAI(api_key=api_key or env_api_key)
-                    response = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a helpful assistant."},
-                            {"role": "user", "content": st.session_state.generated_prompt}
-                        ]
-                    )
-                    st.write("### OpenAI Response")
-                    st.write(response.choices[0].message.content)
-                except Exception as e:
-                    st.error(f"Error when calling OpenAI: {str(e)}")
+            with st.spinner("Creating your enhanced prompt..."):
+                # Add a small delay for UX
+                time.sleep(0.8)
+                transformed_prompt = transform_prompt(role, context, task)
+                
+                # Display the enhanced prompt
+                st.markdown("## 🎯 Your Enhanced Prompt")
+                st.text_area("Copy this prompt to use with your preferred AI:", transformed_prompt, height=400)
+                
+                # Copy button functionality
+                st.markdown("Click the clipboard icon in the top-right of the text box to copy the prompt.")
+                
+                # Add example usage
+                with st.expander("How to use your enhanced prompt"):
+                    st.markdown("""
+                    ### Getting the best results:
+                    
+                    1. **Copy the entire prompt** using the clipboard icon
+                    2. **Paste it directly** into your favorite AI tool (ChatGPT, Claude, etc.)
+                    3. **Review the response** and iterate if needed
+                    
+                    This enhanced prompt is designed to elicit detailed, actionable responses tailored to your specific needs.
+                    """)
+else:
+    st.info("Please enter a valid OpenAI API key to continue.")
 
-if __name__ == "__main__":
-    main()
+# Footer
+st.markdown("---")
+st.markdown("*This app only validates your API key but doesn't store it or use it beyond validation.*")
